@@ -8,6 +8,7 @@ import Utils from '../utils'
 import Config from '../Config'
 import Log from '../Log'
 import { i18nFile } from './I18nFile'
+import axios from 'axios';
 
 interface ILng {
   localepath: string
@@ -181,17 +182,55 @@ export class I18nItem {
     let res = undefined
     for (const plan of plans) {
       try {
-        res = await plan.translate({ text, from, to })
+        // res = await plan.translate({ text, from, to })
+        res = await this.translateByGoogle({ text, from, to });
+        Log.info(res);
         break
       } catch (e) {
+        Log.error(e);
         errors.push(e)
       }
     }
 
-    const result = res && res.result && res.result[0]
+    const result = res;
     if (!result) throw errors
 
     return result
+  }
+
+  translateByGoogle({
+    text,
+    from,
+    to
+  }: {
+    text: string
+    from?: string
+    to: string
+  }) {
+    return new Promise((resolve, reject) => {
+      let word = encodeURIComponent(text)
+      let url = `https://translate.google.com.hk/translate_a/single?client=gtx&dt=t&dj=1&ie=UTF-8&sl=${from}&tl=${to}&q=${word}`
+      axios
+        .get(url, { timeout: 60000 })
+        .then(res => {
+          let { sentences } = res.data
+          if (sentences === undefined) {
+            return reject(`无法翻译${text}`)
+          } else {
+            let result = ''
+            for (let index in sentences) {
+              let item = sentences[index].trans
+              result += item
+            }
+            setTimeout(function () {
+              resolve(result)
+            }, 500)
+          }
+        })
+        .catch(err => {
+          reject(err);
+        })
+    })
   }
 
   async overrideCheck(keypath): Promise<boolean> {
@@ -270,7 +309,7 @@ export class I18nItem {
     })
   }
 
-  getI18n(key: string, mode:MatchMode = MatchMode.READ): ITransData[] {
+  getI18n(key: string, mode: MatchMode = MatchMode.READ): ITransData[] {
     let transData = this.getFileI18n(key, mode)
 
     // 尝试使用 common 配置
@@ -281,7 +320,7 @@ export class I18nItem {
     return transData
   }
 
-  getFileI18n(key: string,  mode:MatchMode = MatchMode.READ): ITransData[] {
+  getFileI18n(key: string, mode: MatchMode = MatchMode.READ): ITransData[] {
     return this.lngs.map((lngItem) => {
       let i18nFilepath = lngItem.filepath
       let keypath = key
@@ -325,7 +364,7 @@ export class I18nItem {
             return reject(err)
           }
 
-          resolve()
+          resolve(0)
         })
       })
     })
